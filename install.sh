@@ -13,6 +13,7 @@ dockerInstallUrl='https://get.docker.com'
 export VERSION='18.09.2'        ## Docker version validated with Replicated and Jama Connect; used by Docker installer
 dockerOptionFile='/etc/docker/daemon.json'
 replicatedInstallUrl='https://get.replicated.com/docker?replicated_tag='
+logFile='install.log'
 
 #### Run as root or with sudo rights
 if [[ $EUID > 0 ]]; then
@@ -24,12 +25,20 @@ fi
 ## Ensure ES memory setting exists in /etc/sysctl.conf
 grep 'vm.max_map_count.*262144' /etc/sysctl.conf > /dev/null 2>&1
 if [ $? -ne "0" ]; then
-    echo "vm.max_map_count = 262144" >> /etc/sysctl.conf
+    echo "vm.max_map_count = 262144" >> /etc/sysctl.conf | tee -a ${logFile}
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Failed to execute 'echo "vm.max_map_count = 262144" >> /etc/sysctl.conf'" | tee -a ${logFile}
+        exit 1
+    fi
 fi
 ## Ensure ES memory setting is loaded in memory
-sysctl --all | grep 'vm.max_map_count = 262144' > /dev/null 2>&1
+sysctl --all | grep 'vm.max_map_count = 262144' > /dev/null 2>&1 | tee -a ${logFile}
 if [ $? -ne "0" ]; then
     sysctl -w vm.max_map_count=262144
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Failed to execute 'sysctl -w vm.max_map_count=262144'" | tee -a ${logFile}
+        exit 1
+    fi
 fi
 
 #### Clear the screen, removing the stdout from the ES memory grep above
@@ -38,15 +47,15 @@ clear
 #### Docker installation
 ## Official Docker-CE installation scriph
 if [ ! $(command -v docker) ]; then
-    curl ${dockerInstallUrl} > /dev/null
+    curl ${dockerInstallUrl} > /dev/null 2>&1
     if [ $? -eq 0 ]; then
-	curl -fsSL ${dockerInstallUrl} | sh
+	curl -fsSL ${dockerInstallUrl} | sh | tee -a ${logFile}
         if [ $? -ne 0 ]; then
-            echo "Something went wrong installing docker-ce-${VERSION}"
+            echo "Something went wrong installing docker-ce-${VERSION}" | tee -a ${logFile}
             exit 1
         fi
     else
-        echo "Access to ${dockerInstallUrl} is not accessible from this server..."
+        echo "Access to ${dockerInstallUrl} is not accessible from this server..." | tee -a ${logFile}
 	exit 1 
     fi
 fi
@@ -63,7 +72,7 @@ else
 fi
 ## Exit if we cannot get the docker0 interface IP address
 if [ -z ${docker0Ip} ]; then
-    echo "Unable to determine the docker0 interface IP address"
+    echo "Unable to determine the docker0 interface IP address" | tee -a ${logFile}
     exit 1
 fi
 
@@ -75,7 +84,7 @@ while IFS=$': \t' read -a line ;do
   done< <(LANG=C /sbin/ifconfig)
 ## Exit if we cannot get the routable, primary interface IP address
 if [ -z ${publicIp} ]; then
-    echo "Unable to determine the routable, primary interface IP address"
+    echo "Unable to determine the routable, primary interface IP address" | tee -a ${logFile}
     exit 1
 fi
 
@@ -97,10 +106,10 @@ do
 done
 ## Printing list of domains that are inaccessible 
 if [ ! -z ${noAccess} ]; then
-    echo -e "\nPlease resolve network access to the domain(s) and try again..."
+    echo -e "\nPlease resolve network access to the domain(s) and try again..." | tee -a ${logFile}
     for domain in ${noAccess[@]}
     do
-        echo "${domain}"
+        echo "${domain}" | tee -a ${logFile}
     done
     exit 1
 fi
@@ -112,6 +121,6 @@ curl -sSL "${replicatedInstallUrl}${replicatedVersion}" | bash -s \
         public-address="${publicIp}" \
         tags="jamacore,elasticsearch" \
         ui-bind-port="${replicatedUiPort}" \
-        no-docker \
-        no-auto
+        no-auto \
+        | tee -a ${logFile}
 
