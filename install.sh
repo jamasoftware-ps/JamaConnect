@@ -83,7 +83,7 @@ if [ $? -ne "0" ]; then
 fi
 
 #### Clear the screen, removing the stdout from the ES memory grep above
-clear
+#clear
 
 #### Docker installation
 ## Official Docker-CE installation scriph
