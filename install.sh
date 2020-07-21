@@ -96,20 +96,32 @@ if [ ! $(command -v docker) ]; then
             exit 1
         fi
     else
-        echo "$RED}ERROR${NC}: Access to ${dockerInstallUrl} is not accessible from this server..." | tee -a ${logFile}
+        echo "${RED}ERROR${NC}: Access to ${dockerInstallUrl} is not accessible from this server..." | tee -a ${logFile}
 	exit 1 
     fi
 fi
 
+#### Ensure that the 'ifconfig' command exists
+which ifconfig > /dev/null
+if [ $? -ne 0 ]; then
+    which apt-get | tee -a ${logFile}
+    if [ $? -eq 0 ]; then
+        apt-get update > /dev/null
+        apt-get -y install net-tools | tee -a ${logFile}
+    else
+        yum -y install net-tools | tee -a ${logFile}
+    fi
+    ## Exit if the 'ifconfig' command doesn't exist
+    which ifconfig > /dev/null
+    if [ $? -ne 0 ]; then
+        echo "${RED}ERROR${NC}: ifconfig command does not exist; Could not be installed" | tee -a ${logFile}
+        exit 1
+    fi
+fi
+
 #### Get the docker0 bridge IP address - Used for the "private-address" during the installation of Replicated
-if [ $(command -v ip) ]; then
-    docker0Ip=$(ip addr show docker0 | grep 'inet ' | awk '{print $2}' | awk -F '/' '{print $1}')
-elif [ $(command -v ifconfig) ]; then
+if [ $(command -v ifconfig) ]; then
     docker0Ip=$(ifconfig docker0 | grep 'inet ' | awk '{print $2}')
-elif [ -f ${dockerOptionFile} ]; then
-    docker0Ip=$(grep bip ${dockerOptionFile} | awk -F '"' '{print $4}' | awk -F '/' '{print $1}')
-else
-    docker0Ip=$(docker network inspect bridge | grep -A 15 '"Name": "bridge",' | grep Gateway | awk -F '"' '{print $4}')
 fi
 ## Exit if we cannot get the docker0 interface IP address
 if [ -z ${docker0Ip} ]; then
@@ -136,6 +148,5 @@ curl -sSL "${replicatedInstallUrl}${replicatedVersion}" | bash -s \
         public-address="${publicIp}" \
         tags="jamacore,elasticsearch" \
         ui-bind-port="${replicatedUiPort}" \
-        no-auto \
         | tee -a ${logFile}
 
