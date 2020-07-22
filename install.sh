@@ -43,15 +43,14 @@ declare -a domains=(
 declare -a noAccess=()
 for domain in "${domains[@]}"
 do
-    #echo "curl ${domain}" > /dev/null 2>&1 || noAccess+=("${domain}")
     curl -s ${domain} > /dev/null
-    #echo "${domain} exit code = $?"
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}SUCCESS${NC}: ${domain}"
     else
 	noAccess+=("${domain}")
     fi
 done
+
 ## Printing list of domains that are inaccessible 
 if [ ! -z ${noAccess} ]; then
     echo -e "\nPlease resolve network access to the domain(s) and try again..." | tee -a ${logFile}
@@ -72,6 +71,7 @@ if [ $? -ne "0" ]; then
         exit 1
     fi
 fi
+
 ## Ensure ES memory setting is loaded in memory
 sysctl --all | grep 'vm.max_map_count = 262144' > /dev/null 2>&1 | tee -a ${logFile}
 if [ $? -ne "0" ]; then
@@ -94,6 +94,8 @@ if [ ! $(command -v docker) ]; then
         if [ $? -ne 0 ]; then
             echo "${RED}ERROR${NC}: Something went wrong installing docker-ce-${VERSION}" | tee -a ${logFile}
             exit 1
+        else
+            systemctl start docker | tee -a ${logFile}
         fi
     else
         echo "${RED}ERROR${NC}: Access to ${dockerInstallUrl} is not accessible from this server..." | tee -a ${logFile}
@@ -101,9 +103,14 @@ if [ ! $(command -v docker) ]; then
     fi
 fi
 
+## Ensure the docker service is enabled at boot time
+if [ $(systemctl status docker | grep 'Loaded:' | awk '{print $4}' | sed 's/;//') != "enabled" ]; then
+    systemctl enable docker | tee -a ${logFile}
+fi
+
 #### Ensure that the 'ifconfig' command exists
-which ifconfig > /dev/null
-if [ $? -ne 0 ]; then
+## Get the docker0 bridge IP address - Used for the "private-address" during the installation of Replicated
+if [ ! $(command -v ifconfig) ]; then
     which apt-get | tee -a ${logFile}
     if [ $? -eq 0 ]; then
         apt-get update > /dev/null
@@ -119,11 +126,8 @@ if [ $? -ne 0 ]; then
     fi
 fi
 
-#### Get the docker0 bridge IP address - Used for the "private-address" during the installation of Replicated
-if [ $(command -v ifconfig) ]; then
-    docker0Ip=$(ifconfig docker0 | grep 'inet ' | awk '{print $2}')
-fi
 ## Exit if we cannot get the docker0 interface IP address
+docker0Ip=$(ifconfig docker0 | grep 'inet ' | awk '{print $2}')
 if [ -z ${docker0Ip} ]; then
     echo "${RED}ERROR${NC}: Unable to determine the docker0 interface IP address" | tee -a ${logFile}
     exit 1
@@ -135,6 +139,7 @@ while IFS=$': \t' read -a line ;do
     [ -z "${line%inet}" ] && ip=${line[${#line[1]}>4?1:2]} &&
         [ "${ip#127.0.0.1}" ] && publicIp=$ip
   done< <(LANG=C /sbin/ifconfig)
+
 ## Exit if we cannot get the routable, primary interface IP address
 if [ -z ${publicIp} ]; then
     echo "${RED}ERROR${NC}: Unable to determine the routable, primary interface IP address" | tee -a ${logFile}
@@ -146,7 +151,5 @@ echo -e "\n\n${YELLOW}Installing the Replicated Admin Console...${NC}"
 curl -sSL "${replicatedInstallUrl}${replicatedVersion}" | bash -s \
         private-address="${docker0Ip}" \
         public-address="${publicIp}" \
-        tags="jamacore,elasticsearch" \
-        ui-bind-port="${replicatedUiPort}" \
         | tee -a ${logFile}
 
