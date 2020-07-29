@@ -108,6 +108,28 @@ if [ $(systemctl status docker | grep 'Loaded:' | awk '{print $4}' | sed 's/;//'
     systemctl enable docker | tee -a ${logFile}
 fi
 
+## Warn if docker is using a non-production storage driver
+dockerStorageDriver=$(docker info | grep Storage | awk '{print $NF}')
+if [ ${dockerStorageDriver} != "overlay2" ]; then
+    echo -e "${RED}WARNING${NC}: Docker is configured with a non-production storage driver... ${RED}Proceed with caution!${NC}" | tee -a ${logFile}
+    echo -e "${RED}WARNING${NC}:   Configure docker to use the 'Overlay2' storage driver" | tee -a ${logFile}
+    echo -e "${RED}WARNING${NC}:   For more details see ${YELLOW}https://docs.docker.com/storage/storagedriver/overlayfs-driver/${NC}" | tee -a ${logFile}
+    #default="Yes"
+    read -t 20 -p "Continue anyway (Y/n)?" choice | tee -a ${logFile}
+    : ${choice:=Yes}
+        case "${choice}" in
+                [yY][eE][sS]|[yY])
+            echo -e "\n${RED}WARNING${NC}: Risk of using non-production docker storage driver accepted. Continuing with installation..." | tee -a ${logFile};;
+                [nN][oO]|[nN])
+            exit 0;;
+                * )
+            echo "invalid choice"
+            exit 0;;
+        esac
+else
+    echo -e "${GREEN}SUCCESS${NC}: Docker is configured to use the 'Overlay2' storage driver" | tee -a ${logFile}
+fi
+
 #### Ensure that the 'ifconfig' command exists
 ## Get the docker0 bridge IP address - Used for the "private-address" during the installation of Replicated
 if [ ! $(command -v ifconfig) ]; then
