@@ -115,7 +115,7 @@ if [ ${dockerStorageDriver} != "overlay2" ]; then
     echo -e "${RED}WARNING${NC}:   Configure docker to use the 'Overlay2' storage driver" | tee -a ${logFile}
     echo -e "${RED}WARNING${NC}:   For more details see ${YELLOW}https://docs.docker.com/storage/storagedriver/overlayfs-driver/${NC}" | tee -a ${logFile}
     #default="Yes"
-    read -t 20 -p "Continue anyway (Y/n)?" choice | tee -a ${logFile}
+    read -t 20 -p "Continue anyway (Y/n)?" choice
     : ${choice:=Yes}
         case "${choice}" in
                 [yY][eE][sS]|[yY])
