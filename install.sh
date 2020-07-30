@@ -45,7 +45,7 @@ for domain in "${domains[@]}"
 do
     curl -s ${domain} > /dev/null
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}SUCCESS${NC}: ${domain}"
+        echo -e "${GREEN}SUCCESS${NC}: ${domain}" | tee -a ${logFile}
     else
 	noAccess+=("${domain}")
     fi
