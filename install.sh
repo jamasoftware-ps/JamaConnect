@@ -149,7 +149,7 @@ if [ ! $(command -v ifconfig) ]; then
 fi
 
 ## Exit if we cannot get the docker0 interface IP address
-docker0Ip=$(ifconfig docker0 | grep 'inet ' | awk '{print $2}')
+docker0Ip=$(ifconfig docker0 | grep 'inet ' | awk '{print $2}' | sed -e 's/addr://')
 if [ -z ${docker0Ip} ]; then
     echo "${RED}ERROR${NC}: Unable to determine the docker0 interface IP address" | tee -a ${logFile}
     exit 1
